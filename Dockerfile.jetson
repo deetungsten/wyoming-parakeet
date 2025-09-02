@@ -1,6 +1,6 @@
 # Jetson-optimized Dockerfile for Wyoming Parakeet server (JetPack 6.x)
 # Use community-maintained container for JetPack 6.x support
-FROM dustynv/pytorch:2.6-r36.4.0
+FROM dustynv/pytorch:2.7-r36.4.0-cu128-24.04
 
 # Set environment variables optimized for Jetson
 ENV DEBIAN_FRONTEND=noninteractive
