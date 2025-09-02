@@ -4,7 +4,7 @@ services:
   wyoming-parakeet-jetson:
     build:
       context: .
-      dockerfile: Dockerfile.jetson-jp6
+      dockerfile: Dockerfile.jetson
     container_name: wyoming-parakeet-jetson
     restart: unless-stopped
     ports:
