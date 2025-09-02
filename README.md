@@ -36,9 +36,9 @@ docker run -it -p 10300:10300 -v /path/to/local/data:/data rhasspy/wyoming-parak
 **NOTE**: Models are downloaded temporarily to the `HF_HUB_CACHE` directory, which defaults to `~/.cache/huggingface/hub`.
 You may need to adjust this environment variable when using a read-only root filesystem (e.g., `HF_HUB_CACHE=/tmp`).
 
-## Jetson Orin Nano Deployment
+## Jetson Orin Nano Deployment (JetPack 6.x)
 
-For NVIDIA Jetson Orin Nano devices, use the optimized Docker configuration:
+For NVIDIA Jetson Orin Nano devices running JetPack 6.x, use the optimized Docker configuration:
 
 ### Prerequisites
 
@@ -54,17 +54,12 @@ For NVIDIA Jetson Orin Nano devices, use the optimized Docker configuration:
 
 1. Clone and build:
    ```bash
-   git clone https://github.com/rhasspy/wyoming-parakeet.git
+   git clone https://github.com/deetungsten/wyoming-parakeet.git
    cd wyoming-parakeet
-   ./build-jetson.sh
-   ```
-
-2. Run with docker-compose:
-   ```bash
    docker-compose -f docker-compose.jetson.yml up -d
    ```
 
-3. Check logs:
+2. Check logs:
    ```bash
    docker-compose -f docker-compose.jetson.yml logs -f
    ```
@@ -83,5 +78,13 @@ To use a different Parakeet model, set the environment variable:
 ```bash
 MODEL_NAME=nvidia/parakeet-tdt-1.1b docker-compose -f docker-compose.jetson.yml up -d
 ```
+
+### JetPack 6.x Optimizations
+
+This deployment uses:
+- **dustynv/pytorch:2.6-r36.4.0** base container (community-maintained for JetPack 6.x)
+- **NeMo from git** for latest compatibility
+- **nvidia/parakeet-tdt-0.6b** model (optimized for edge devices)
+- **CUDA acceleration** with proper memory management
 
 [Source](https://github.com/rhasspy/wyoming-addons/tree/master/whisper)

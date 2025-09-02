@@ -1,6 +1,6 @@
-# Jetson-optimized Dockerfile for Wyoming Parakeet server  
-# Use L4T PyTorch container for Jetson ARM64 compatibility
-FROM nvcr.io/nvidia/l4t-pytorch:r36.2.0-pth2.1-py3
+# Jetson-optimized Dockerfile for Wyoming Parakeet server (JetPack 6.x)
+# Use community-maintained container for JetPack 6.x support
+FROM dustynv/pytorch:2.6-r36.4.0
 
 # Set environment variables optimized for Jetson
 ENV DEBIAN_FRONTEND=noninteractive
@@ -9,20 +9,6 @@ ENV PIP_NO_CACHE_DIR=1
 ENV CUDA_VISIBLE_DEVICES=0
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    cmake \
-    ffmpeg \
-    git \
-    libsndfile1-dev \
-    libsox-dev \
-    pkg-config \
-    sox \
-    wget \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
 
 # Create working directory
 WORKDIR /app
@@ -34,6 +20,7 @@ COPY pyproject.toml ./
 RUN apt-get update && apt-get install -y \
     libsndfile1 \
     ffmpeg \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install NeMo and dependencies using NVIDIA's recommended approach
