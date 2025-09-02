@@ -5,9 +5,10 @@ import logging
 import os
 import tempfile
 import wave
-from typing import Optional
+from typing import Optional, Any
 
-import faster_whisper
+import torch
+import librosa
 from wyoming.asr import Transcribe, Transcript
 from wyoming.audio import AudioChunk, AudioStop
 from wyoming.event import Event
@@ -17,17 +18,16 @@ from wyoming.server import AsyncEventHandler
 _LOGGER = logging.getLogger(__name__)
 
 
-class FasterWhisperEventHandler(AsyncEventHandler):
+class ParakeetEventHandler(AsyncEventHandler):
     """Event handler for clients."""
 
     def __init__(
         self,
         wyoming_info: Info,
         cli_args: argparse.Namespace,
-        model: faster_whisper.WhisperModel,
+        model: Any,
         model_lock: asyncio.Lock,
         *args,
-        initial_prompt: Optional[str] = None,
         **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -36,11 +36,11 @@ class FasterWhisperEventHandler(AsyncEventHandler):
         self.wyoming_info_event = wyoming_info.event()
         self.model = model
         self.model_lock = model_lock
-        self.initial_prompt = initial_prompt
         self._language = self.cli_args.language
         self._wav_dir = tempfile.TemporaryDirectory()
         self._wav_path = os.path.join(self._wav_dir.name, "speech.wav")
         self._wav_file: Optional[wave.Wave_write] = None
+        self._audio_data = []
 
     async def handle_event(self, event: Event) -> bool:
         if AudioChunk.is_type(event.type):
@@ -56,24 +56,29 @@ class FasterWhisperEventHandler(AsyncEventHandler):
             return True
 
         if AudioStop.is_type(event.type):
-            _LOGGER.debug(
-                "Audio stopped. Transcribing with initial prompt=%s",
-                self.initial_prompt,
-            )
+            _LOGGER.debug("Audio stopped. Transcribing with Parakeet")
             assert self._wav_file is not None
 
             self._wav_file.close()
             self._wav_file = None
 
             async with self.model_lock:
-                segments, _info = self.model.transcribe(
-                    self._wav_path,
-                    beam_size=self.cli_args.beam_size,
-                    language=self._language,
-                    initial_prompt=self.initial_prompt,
+                # Load audio using librosa
+                audio_data, sample_rate = librosa.load(self._wav_path, sr=16000)
+                
+                # Convert to list for NeMo model
+                audio_signal = [torch.tensor(audio_data)]
+                audio_signal_length = [torch.tensor(len(audio_data))]
+                
+                # Transcribe with Parakeet model
+                transcriptions = self.model.transcribe(
+                    audio_signal=audio_signal,
+                    audio_signal_length=audio_signal_length
                 )
+                
+                # Extract text from transcription result
+                text = transcriptions[0] if transcriptions else ""
 
-            text = " ".join(segment.text for segment in segments)
             _LOGGER.info(text)
 
             await self.write_event(Transcript(text=text).event())
@@ -81,6 +86,7 @@ class FasterWhisperEventHandler(AsyncEventHandler):
 
             # Reset
             self._language = self.cli_args.language
+            self._audio_data = []
 
             return False
 

@@ -1,0 +1,102 @@
+# Jetson-optimized Dockerfile for Wyoming Parakeet server
+FROM nvcr.io/nvidia/l4t-ml:r36.2.0-py3
+
+# Set environment variables optimized for Jetson
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+ENV CUDA_VISIBLE_DEVICES=0
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    ffmpeg \
+    git \
+    libsndfile1-dev \
+    libsox-dev \
+    pkg-config \
+    sox \
+    wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY pyproject.toml ./
+
+# Install Python dependencies with Jetson optimizations
+RUN python3 -m pip install --upgrade pip setuptools wheel && \
+    # Install PyTorch from NVIDIA's pre-built wheels for Jetson
+    pip3 install torch torchvision torchaudio --index-url https://developer.download.nvidia.com/compute/redist/jp/v512 && \
+    # Install NeMo toolkit with optimizations
+    pip3 install Cython && \
+    pip3 install nemo-toolkit[asr]==1.18.0 && \
+    pip3 install librosa==0.9.2 && \
+    pip3 install soundfile && \
+    # Install the package
+    pip3 install -e .
+
+# Copy application code
+COPY wyoming_parakeet/ ./wyoming_parakeet/
+COPY script/ ./script/
+COPY README.md ./
+
+# Create data and cache directories
+RUN mkdir -p /data /cache && \
+    chmod 755 /data /cache
+
+# Set cache directory for models
+ENV HF_HUB_CACHE=/cache
+ENV NEMO_CACHE_DIR=/cache
+
+# Expose port
+EXPOSE 10300
+
+# Jetson-specific optimizations
+ENV JETSON_MODEL_NAME="nvidia/parakeet-tdt-0.6b"
+ENV JETSON_DEVICE="cuda"
+ENV JETSON_PRECISION="float16"
+ENV CUDA_LAUNCH_BLOCKING=1
+ENV PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+
+# Health check with longer timeout for Jetson
+HEALTHCHECK --interval=60s --timeout=30s --start-period=120s --retries=3 \
+    CMD python3 -c "import socket; s = socket.socket(); s.connect(('localhost', 10300)); s.close()" || exit 1
+
+# Create entrypoint script for flexible configuration
+RUN echo '#!/bin/bash\n\
+set -e\n\
+\n\
+# Set default values if not provided\n\
+MODEL_NAME=${MODEL_NAME:-${JETSON_MODEL_NAME}}\n\
+DEVICE=${DEVICE:-${JETSON_DEVICE}}\n\
+PRECISION=${PRECISION:-${JETSON_PRECISION}}\n\
+LANGUAGE=${LANGUAGE:-en}\n\
+URI=${URI:-tcp://0.0.0.0:10300}\n\
+DATA_DIR=${DATA_DIR:-/data}\n\
+DOWNLOAD_DIR=${DOWNLOAD_DIR:-/data}\n\
+\n\
+echo "Starting Wyoming Parakeet with:"\n\
+echo "  Model: $MODEL_NAME"\n\
+echo "  Device: $DEVICE"\n\
+echo "  Precision: $PRECISION"\n\
+echo "  Language: $LANGUAGE"\n\
+echo "  URI: $URI"\n\
+\n\
+exec python3 -m wyoming_parakeet \\\n\
+     --model "$MODEL_NAME" \\\n\
+     --uri "$URI" \\\n\
+     --data-dir "$DATA_DIR" \\\n\
+     --download-dir "$DOWNLOAD_DIR" \\\n\
+     --device "$DEVICE" \\\n\
+     --precision "$PRECISION" \\\n\
+     --language "$LANGUAGE" \\\n\
+     "$@"\n\
+' > /app/entrypoint.sh && chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]

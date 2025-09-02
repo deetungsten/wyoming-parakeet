@@ -1,4 +1,4 @@
-"""Tests for wyoming-faster-whisper"""
+"""Tests for wyoming-parakeet"""
 
 import asyncio
 import re
@@ -24,15 +24,15 @@ _TRANSCRIBE_TIMEOUT = 60
 
 
 @pytest.mark.asyncio
-async def test_faster_whisper() -> None:
+async def test_parakeet() -> None:
     proc = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
-        "wyoming_faster_whisper",
+        "wyoming_parakeet",
         "--uri",
         "stdio://",
         "--model",
-        "tiny-int8",
+        "nvidia/parakeet-tdt-1.1b",
         "--data-dir",
         str(_LOCAL_DIR),
         "--language",
@@ -59,12 +59,12 @@ async def test_faster_whisper() -> None:
         asr = info.asr[0]
         assert len(asr.models) > 0, "Expected at least one model"
         assert any(
-            m.name == "tiny-int8" for m in asr.models
-        ), "Expected tiny-int8 model"
+            "parakeet" in m.name.lower() for m in asr.models
+        ), "Expected parakeet model"
         break
 
-    # We want to use the whisper model
-    await async_write_event(Transcribe(name="tiny-int8").event(), proc.stdin)
+    # We want to use the parakeet model
+    await async_write_event(Transcribe(name="parakeet-tdt-1.1b").event(), proc.stdin)
 
     # Test known WAV
     with wave.open(str(_DIR / "turn_on_the_living_room_lamp.wav"), "rb") as example_wav:

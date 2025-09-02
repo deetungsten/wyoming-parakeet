@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  wyoming-parakeet-jetson:
+    build:
+      context: .
+      dockerfile: Dockerfile.jetson
+    container_name: wyoming-parakeet-jetson
+    restart: unless-stopped
+    ports:
+      - "10300:10300"
+    volumes:
+      - ./data:/data
+      - ./cache:/cache
+    environment:
+      # Model configuration
+      - MODEL_NAME=nvidia/parakeet-tdt-0.6b
+      - DEVICE=cuda
+      - PRECISION=float16
+      - LANGUAGE=en
+      
+      # Network configuration  
+      - URI=tcp://0.0.0.0:10300
+      
+      # Directory configuration
+      - DATA_DIR=/data
+      - DOWNLOAD_DIR=/data
+      
+      # Jetson optimizations
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_LAUNCH_BLOCKING=1
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+      
+      # Cache configuration
+      - HF_HUB_CACHE=/cache
+      - NEMO_CACHE_DIR=/cache
+      
+    runtime: nvidia
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s = socket.socket(); s.connect(('localhost', 10300)); s.close()"]
+      interval: 60s
+      timeout: 30s
+      retries: 3
+      start_period: 120s
+    
+    # Jetson-specific configuration
+    privileged: false
+    security_opt:
+      - no-new-privileges:true
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+networks:
+  default:
+    name: wyoming-parakeet-jetson-network

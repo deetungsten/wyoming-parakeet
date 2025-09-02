@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  wyoming-parakeet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wyoming-parakeet
+    restart: unless-stopped
+    ports:
+      - "10300:10300"
+    volumes:
+      - ./data:/data
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    environment:
+      - MODEL_NAME=nvidia/parakeet-tdt-0.6b
+      - DEVICE=cuda
+      - PRECISION=float16
+      - DISPLAY=${DISPLAY}
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s = socket.socket(); s.connect(('localhost', 10300)); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  default:
+    name: wyoming-parakeet-network
